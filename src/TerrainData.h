@@ -26,9 +26,7 @@ struct TileKey
 
     bool operator<(const TileKey& key) const
     {
-        if (level != key.level) return level < key.level;
-        if (x != key.x) return x < key.x;
-        return y < key.y;
+        return std::tie(level, x, y) < std::tie(key.level, key.x, key.y);
     }
 };
 

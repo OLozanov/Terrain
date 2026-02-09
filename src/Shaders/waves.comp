@@ -1,0 +1,44 @@
+#version 450
+layout (local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+struct Wave
+{
+    vec2 frequency;
+    float amplitude;
+    float speed;
+};
+    
+layout(binding = 0) uniform UniformBufferObject 
+{
+    Wave waves[16];
+
+} data;
+
+layout (binding = 1) writeonly uniform image2DArray image;
+
+void main (void) 
+{
+    uint frame = gl_GlobalInvocationID.z;
+
+	ivec2 texelCoords = ivec2(gl_GlobalInvocationID.xy);
+
+    vec3 norm = vec3(0.0, 0.0, 0.0);
+
+    for (int i = 0; i < 16; i++)
+    {
+        const float t = frame * data.waves[i].speed;
+
+        const vec2 w = data.waves[i].frequency;
+        const float a = data.waves[i].amplitude;
+
+        float c = cos(dot(w, texelCoords) + t);
+        float dx = w.x * a * c;
+        float dy = w.y * a * c;
+
+        norm += vec3(-dx, -dy, 1.0);
+    }
+
+    vec4 color = vec4(normalize(norm) * 0.5 + 0.5, 1.0);
+
+    imageStore(image, ivec3(gl_GlobalInvocationID.xyz), color);
+}

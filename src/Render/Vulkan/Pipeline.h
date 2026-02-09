@@ -34,7 +34,8 @@ class Pipeline
 private:
     VkDescriptorSetLayout m_descriptorSetLayout;
     VkPipelineLayout m_pipelineLayout;
-    VkPipeline m_graphicsPipeline;
+    VkPipeline m_pipeline;
+    VkPipelineBindPoint m_type;
 
     VkShaderModule loadShader(const char * name);
     VkShaderModule buildShader(const uint8_t* buffer, size_t size);
@@ -47,8 +48,10 @@ private:
               const BindingLayout& bindingLayout,
               const PipelineParameters& params);
 
-public:
+    void init(VkShaderModule computeShaderModule,
+              const BindingLayout& bindingLayout);
 
+public:
     Pipeline(const char * shader, 
              const InputLayout& inputLayout,
              const BindingLayout& bindingLayout,
@@ -59,9 +62,13 @@ public:
              const InputLayout& inputLayout,
              const BindingLayout& bindingLayout,
              const PipelineParameters& params);
+
+    Pipeline(const uint8_t* computeShader, size_t computeShaderSize, const BindingLayout& bindingLayout);
+
     ~Pipeline();
 
-    operator VkPipeline() const { return m_graphicsPipeline; }
+    VkPipelineBindPoint type() const { return m_type; }
+    operator VkPipeline() const { return m_pipeline; }
 
     VkPipelineLayout pipelineLayout() const { return m_pipelineLayout; }
     VkDescriptorSetLayout descriptorLayout() const { return m_descriptorSetLayout; }

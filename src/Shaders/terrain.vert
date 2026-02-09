@@ -26,6 +26,8 @@ layout(location = 1) out vec2 fragTexCoord;
 layout(location = 2) out vec2 fragTerCoord;
 layout(location = 3) out float fragHeight;
 
+const float tex_scale = 0.25; 
+
 vec2 morphVertex(vec2 gridpos, float morph)
 {
 	vec2 fracPart = fract(gridpos * 0.5) * 2.0;  // detect odd vertices
@@ -58,9 +60,9 @@ void main()
     gl_Position = view.proj * world_pos;
     
     fragPos = world_pos.xyz;
-	fragTexCoord = (params.modelMat * pos).xz * 0.5;
+	fragTexCoord = (params.modelMat * pos).xz * tex_scale;
     fragTerCoord = ter_coord;
     fragHeight = pos.y;
 
-    gl_ClipDistance[0] = params.clip == 1 ? pos.y - 9.2 : 1.0;
+    gl_ClipDistance[0] = params.clip == 1 ? pos.y - 9.7 : 1.0;
 }

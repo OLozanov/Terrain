@@ -16,6 +16,8 @@ public:
     void bind(uint32_t binding, VkImageView image, VkSampler sampler);
     void bind(uint32_t binding, uint32_t index, VkImageView image, VkSampler sampler);
 
+    void bind(uint32_t binding, VkImageView image);
+
     operator VkDescriptorSet() const { return m_descriptorSet; }
 };
 

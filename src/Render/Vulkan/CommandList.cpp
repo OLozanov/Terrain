@@ -163,10 +163,11 @@ void CommandList::finishRender()
     m_clear = false;
 }
 
-void CommandList::bindPipeline(const Pipeline& graphicsPipeline)
+void CommandList::bindPipeline(const Pipeline& pipeline)
 {
-    vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-    m_layout = graphicsPipeline.pipelineLayout();
+    vkCmdBindPipeline(m_commandBuffer, pipeline.type(), pipeline);
+    m_layout = pipeline.pipelineLayout();
+    m_pipelineType = pipeline.type();
 }
 
 void CommandList::bindIndexBuffer(VkBuffer buffer)
@@ -183,7 +184,7 @@ void CommandList::bindVertexBuffer(VkBuffer buffer)
 void CommandList::bindDescriptorSet(VkDescriptorSet descriptorSet)
 {
     vkCmdBindDescriptorSets(m_commandBuffer,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_pipelineType,
                             m_layout,
                             0, 1,
                             &descriptorSet,
@@ -220,7 +221,7 @@ void CommandList::bind(uint32_t binding, VkBuffer buffer, VkDeviceSize size)
                                      };
 
     vkCmdPushDescriptorSet(m_commandBuffer,
-                           VK_PIPELINE_BIND_POINT_GRAPHICS,
+                           m_pipelineType,
                            m_layout,
                            0, 1,
                            &writeInfo);
@@ -242,7 +243,7 @@ void CommandList::bind(uint32_t binding, VkImageView image, VkSampler sampler)
                                       };
 
     vkCmdPushDescriptorSet(m_commandBuffer, 
-                           VK_PIPELINE_BIND_POINT_GRAPHICS,
+                           m_pipelineType,
                            m_layout, 
                            0, 1,
                            &writeInfo);
@@ -264,7 +265,7 @@ void CommandList::bind(uint32_t binding, VkImageView image)
     };
 
     vkCmdPushDescriptorSet(m_commandBuffer,
-                           VK_PIPELINE_BIND_POINT_GRAPHICS,
+                           m_pipelineType,
                            m_layout,
                            0, 1,
                            &writeInfo);
@@ -278,6 +279,11 @@ void CommandList::draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t fi
 void CommandList::drawIndexed(uint16_t num)
 {
     vkCmdDrawIndexed(m_commandBuffer, num, 1, 0, 0, 0);
+}
+
+void CommandList::dispatch(uint32_t x, uint32_t y, uint32_t z)
+{
+    vkCmdDispatch(m_commandBuffer, x, y, z);
 }
 
 void CommandList::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, size_t size)
@@ -367,10 +373,88 @@ void CommandList::blitImage(VkImage src,
     blitRegion.dstOffsets[1] = dstOffsetMax;
 
     vkCmdBlitImage(m_commandBuffer,
-                    src, VK_IMAGE_LAYOUT_UNDEFINED,
-                    dst, VK_IMAGE_LAYOUT_UNDEFINED,
-                    1, &blitRegion,
-                    filter);
+                   src, VK_IMAGE_LAYOUT_UNDEFINED,
+                   dst, VK_IMAGE_LAYOUT_UNDEFINED,
+                   1, &blitRegion,
+                   filter);
+}
+
+void CommandList::buildMipmaps(VkImage image, uint32_t width, uint32_t height, uint32_t levels, uint32_t layers)
+{
+    uint32_t mipWidth = width;
+    uint32_t mipHeight = height;
+
+    for (uint32_t i = 1; i < levels; i++)
+    {
+        VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = i - 1;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+        vkCmdPipelineBarrier(m_commandBuffer,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT, 
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0,
+                             0, nullptr,
+                             0, nullptr,
+                             1, &barrier);
+
+        VkImageBlit blitRegion{};
+        blitRegion.srcOffsets[0] = { 0, 0, 0 };
+        blitRegion.srcOffsets[1] = { int32_t(mipWidth), int32_t(mipHeight), 1 };
+        blitRegion.dstOffsets[0] = { 0, 0, 0 };
+        blitRegion.dstOffsets[1] = { int32_t(mipWidth >> 1), int32_t(mipHeight >> 1), 1 };
+        blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blitRegion.srcSubresource.baseArrayLayer = 0;
+        blitRegion.srcSubresource.layerCount = layers;
+        blitRegion.srcSubresource.mipLevel = i - 1;
+        blitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blitRegion.dstSubresource.baseArrayLayer = 0;
+        blitRegion.dstSubresource.layerCount = layers;
+        blitRegion.dstSubresource.mipLevel = i;
+
+        vkCmdBlitImage(m_commandBuffer,
+                       image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1, &blitRegion,
+                       VK_FILTER_LINEAR);
+
+        mipWidth = mipWidth >> 1;
+        mipHeight = mipHeight >> 1;
+    }
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = levels - 1;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+    vkCmdPipelineBarrier(m_commandBuffer,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0,
+                         0, nullptr,
+                         0, nullptr,
+                         1, &barrier);
 }
 
 void CommandList::reset()
@@ -404,7 +488,7 @@ void CommandList::barrier(VkImage image, VkImageLayout oldLayout, VkImageLayout 
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
     barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
     barrier.srcAccessMask = 0;
     barrier.dstAccessMask = 0;
 
@@ -450,6 +534,18 @@ void CommandList::barrier(VkImage image, VkImageLayout oldLayout, VkImageLayout 
     {
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+
+    if (newLayout == VK_IMAGE_LAYOUT_GENERAL)
+    {
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+
+    if (oldLayout == VK_IMAGE_LAYOUT_GENERAL)
+    {
+        barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     }
 
     if (newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)

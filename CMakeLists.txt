@@ -21,7 +21,7 @@ file(GLOB SRC_FILES "src/*.cpp")
 file(GLOB RESOURCES_FILES "src/Resources/*.cpp")
 file(GLOB RENDER_FILES "src/Render/*.cpp")
 file(GLOB VULKAN_FILES "src/Render/Vulkan/*.cpp")
-file(GLOB SHADER_FILES "src/Shaders/*.vert" "src/Shaders/*.frag")
+file(GLOB SHADER_FILES "src/Shaders/*.vert" "src/Shaders/*.frag" "src/Shaders/*.comp")
 
 # Compile shaders
 configure_file(

@@ -22,8 +22,12 @@
 #include "shaders/debug.vert.h"
 #include "shaders/debug.frag.h"
 
+#include "shaders/mipmap.comp.h"
+#include "shaders/waves.comp.h"
+
+#include <random>
 #include <string>
-#include <cmath>
+#include <algorithm>
 
 const Render::InputLayout SimpleLayout = { .bindings = { {0, sizeof(glm::vec3), VK_VERTEX_INPUT_RATE_VERTEX} },
                                            .attributes = { {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0} }
@@ -70,12 +74,15 @@ const Render::BindingLayout WaterBindings = { .bindings = { {0, VK_DESCRIPTOR_TY
                                                             {3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
                                                             {4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr} },
                                               .pushranges = { {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) },
-                                                              {VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(float), sizeof(uint32_t) * 3 },}
+                                                              {VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(float), sizeof(uint32_t) * 4 },}
                                             };
 
 const Render::BindingLayout DebugBindings = { .bindings = { {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr} },
                                               .pushranges = { {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 16} }
                                             };
+
+const Render::BindingLayout WavesBindings = { .bindings = { {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+                                                            {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr} } };
 
 App::App(VkSurfaceKHR surface)
 : m_swapchain(surface)
@@ -98,12 +105,16 @@ App::App(VkSurfaceKHR surface)
                   { .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
                     .depthTest = VK_TRUE,
                     .depthWrite = VK_FALSE })
+, m_wavesPipeline(g_waves_comp, g_waves_comp_size, WavesBindings)
 , m_skyDescriptors(m_skyPipeline.descriptorLayout())
 , m_skyReflDescriptors(m_skyPipeline.descriptorLayout())
 , m_terrainDescriptors(m_terrainPipeline.descriptorLayout())
 , m_terrainReflDescriptors(m_terrainPipeline.descriptorLayout())
 , m_fogDescriptors(m_fogPipeline.descriptorLayout())
+, m_waterDescriptors(m_waterPipeline.descriptorLayout())
 , m_debugDescriptors(m_debugPipeline.descriptorLayout())
+, m_wavesDescriptors(m_wavesPipeline.descriptorLayout())
+, m_waveParams(WavesNum)
 , m_grass(LoadImage("textures/grass.png"))
 , m_dirt(LoadImage("textures/dirt.png"))
 , m_rock(LoadImage("textures/rock.png"))
@@ -111,6 +122,10 @@ App::App(VkSurfaceKHR surface)
 , m_dirtNorm(LoadImage("textures/dirt_n.png"))
 , m_rockNorm(LoadImage("textures/rock_n.png"))
 , m_clouds(LoadImage("textures/clouds.png"))
+, m_waves(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | 
+                                    VK_IMAGE_USAGE_STORAGE_BIT |
+                                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                    VK_IMAGE_USAGE_TRANSFER_DST_BIT)
 , m_clampSampler(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
 , m_depth(VK_FORMAT_D24_UNORM_S8_UINT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT)
 , m_background(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
@@ -129,14 +144,6 @@ App::App(VkSurfaceKHR surface)
 , m_animTime(0.0f)
 , m_waveAnimFrame(0.0f)
 {
-    m_waves.resize(WavesFrameNum);
-
-    for (size_t i = 0; i < WavesFrameNum; i++)
-    {
-        std::string path = std::string("textures/waves") + std::to_string(i) + ".png";
-        m_waves[i].reset(LoadImage(path.c_str()));
-    }
-
     initBoxGeometry();
 
     const VkExtent2D& frameExtent = m_swapchain.frameExtent();
@@ -147,6 +154,8 @@ App::App(VkSurfaceKHR surface)
     m_reflDepth.reset(frameExtent.width, frameExtent.height);
 
     m_reflection.setLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    m_waves.reset(WavesTextureSize, WavesTextureSize, WavesFrameNum, WavesMipLevels);
 
     m_reflFramebuffer.resize(frameExtent);
     m_reflFramebuffer.addColorAttachment(m_reflection);
@@ -182,20 +191,16 @@ App::App(VkSurfaceKHR surface)
     m_fogDescriptors.bind(0, m_mainView.sceneConstantBuffer(), sizeof(ViewConstantBuffer));
     m_fogDescriptors.bind(1, m_depth, m_clampSampler);
 
-    m_waterDescriptors.reserve(WavesFrameNum);
-
-    for (size_t i = 0; i < WavesFrameNum; i++)
-    {
-        m_waterDescriptors.emplace_back(m_waterPipeline.descriptorLayout());
-
-        m_waterDescriptors[i].bind(0, m_mainView.sceneConstantBuffer(), sizeof(ViewConstantBuffer));
-        m_waterDescriptors[i].bind(1, m_depth, m_clampSampler);
-        m_waterDescriptors[i].bind(2, m_background, m_clampSampler);
-        m_waterDescriptors[i].bind(3, m_reflection, m_clampSampler);
-        m_waterDescriptors[i].bind(4, *m_waves[i], m_sampler);
-    }
+    m_waterDescriptors.bind(0, m_mainView.sceneConstantBuffer(), sizeof(ViewConstantBuffer));
+    m_waterDescriptors.bind(1, m_depth, m_clampSampler);
+    m_waterDescriptors.bind(2, m_background, m_clampSampler);
+    m_waterDescriptors.bind(3, m_reflection, m_clampSampler);
+    m_waterDescriptors.bind(4, m_waves, m_sampler);
 
     m_debugDescriptors.bind(0, m_mainView.sceneConstantBuffer(), sizeof(ViewConstantBuffer));
+
+    m_wavesDescriptors.bind(0, m_waveParams, sizeof(WaveParams) * WavesNum);
+    m_wavesDescriptors.bind(1, m_waves);
 
     resize(frameExtent.width, frameExtent.height);
     m_mainView.setProjectionMat(m_projMat, ZNear, ZFar);
@@ -204,6 +209,8 @@ App::App(VkSurfaceKHR surface)
     m_camera.setPos(glm::vec3(0.0f, 50.0f, 0.0f));
 
     m_reflectionThread.detach();
+
+    generateWaves();
 }
 
 App::~App()
@@ -268,7 +275,60 @@ void App::update(float dt)
     if (m_keys & key_down) m_camera.move(-dir * m_speed * dt);
 
     m_animTime = std::fmod(m_animTime + dt * AnimSpeed, AnimRange);
-    m_waveAnimFrame = std::fmod(m_waveAnimFrame + dt * 8.0f, float(WavesFrameNum));
+    m_waveAnimFrame = std::fmod(m_waveAnimFrame + dt * WavesAnimSpeed, float(WavesFrameNum));
+}
+
+void App::generateWaves()
+{
+    std::random_device rd;
+
+    std::seed_seq seq { rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd() };
+
+    std::mt19937 uniformGenerator(seq);
+
+    // Amplitude variation
+    std::uniform_real_distribution<float> amplitudeDistribution(0.8f, 1.2f);
+
+    // Frequency distridution 
+    std::vector<uint32_t> freq = { 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4 };
+
+    // Directions distribution
+    std::vector<glm::vec2> dirs = { {1.0f, 0.0f}, {-1.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, -1.0f},
+                                    {1.0f, 1.0f}, {-1.0f, 1.0f}, {-1.0f, -1.0f}, {1.0f, -1.0f},
+                                    {0.5f, 1.0f}, {1.0f, 0.5f}, {-0.5f, 1.0f}, {-1.0f, 0.5f},
+                                    {-0.5f, -1.0f}, {-1.0f, -0.5f}, {0.5f, -1.0f}, {1.0f, -0.5f} };
+
+    std::shuffle(freq.begin(), freq.end(), uniformGenerator);
+    std::shuffle(dirs.begin(), dirs.end(), uniformGenerator);
+
+    for (size_t i = 0; i < 16; i++)
+    {
+        uint32_t wlen = 256 >> freq[i];
+
+        float w = 1.0f / wlen * 2.0 * glm::pi<float>();
+
+        m_waveParams[i].frequency = dirs[i] * w;
+        m_waveParams[i].amplitude = 150.0f / (1 << freq[i]) * amplitudeDistribution(uniformGenerator);
+        m_waveParams[i].speed = glm::pi<float>() * 2.0f / WavesFrameNum * (freq[i] >= 3 ? 2.0f : 1.0f);
+    }
+
+    Render::VulkanInstance& vkInstance = Render::VulkanInstance::GetInstance();
+
+    m_mainCommandList.begin();
+
+    m_mainCommandList.bindPipeline(m_wavesPipeline);
+    m_mainCommandList.bindDescriptorSet(m_wavesDescriptors);
+    m_mainCommandList.barrier(m_waves, VK_IMAGE_LAYOUT_GENERAL);
+
+    m_mainCommandList.dispatch(WavesTextureSize, WavesTextureSize, WavesFrameNum);
+
+    m_mainCommandList.barrier(m_waves, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    m_mainCommandList.buildMipmaps(m_waves, WavesTextureSize, WavesTextureSize, WavesMipLevels, WavesFrameNum);
+    m_mainCommandList.barrier(m_waves, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    m_mainCommandList.finish();
+
+    vkInstance.submit(m_mainCommandList);
+    vkInstance.waitIdle();
 }
 
 void App::displayReflection()
@@ -393,9 +453,9 @@ void App::display()
         m_mainCommandList.barrier(m_reflection, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         m_mainCommandList.bindFrameBuffer(m_swapchain.frameExtent(), m_swapchain.colorBuffer(bufferIndex));
         m_mainCommandList.bindPipeline(m_waterPipeline);
-        m_mainCommandList.bindDescriptorSet(m_waterDescriptors[m_waveAnimFrame]);
+        m_mainCommandList.bindDescriptorSet(m_waterDescriptors);
 
-        uint32_t reflectionParams[3] = { m_camera.pos().y > WaterLevel ? 1 : 0, m_width, m_height };
+        uint32_t reflectionParams[4] = { m_camera.pos().y > WaterLevel ? 1 : 0, m_width, m_height, m_waveAnimFrame };
         m_mainCommandList.setConstant(4, reflectionParams, VK_SHADER_STAGE_FRAGMENT_BIT);
         m_mainCommandList.draw(4);
     }

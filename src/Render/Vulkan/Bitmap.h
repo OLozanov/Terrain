@@ -27,7 +27,7 @@ public:
     static VkImageAspectFlags GetAspectMask(VkFormat format);
 
     void reset();
-    void reset(uint32_t width, uint32_t height);
+    void reset(uint32_t width, uint32_t height, uint32_t layers = 1, uint32_t mipmaps = 1);
 
     void setLayout(VkImageLayout layout);
 

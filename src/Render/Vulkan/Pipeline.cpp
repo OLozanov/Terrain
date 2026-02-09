@@ -14,6 +14,8 @@ Pipeline::Pipeline(const char* shader,
                    const BindingLayout& bindingLayout,
                    const PipelineParameters& params)
 {
+    m_type = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
     std::string shaderPath = "shaders/" + std::string(shader);
     std::string vertexShaderPath = shaderPath + ".vert.spv";
     std::string fragmentShaderPath = shaderPath + ".frag.spv";
@@ -22,6 +24,9 @@ Pipeline::Pipeline(const char* shader,
     VkShaderModule fragShaderModule = loadShader(fragmentShaderPath.c_str());
 
     init(vertShaderModule, fragShaderModule, inputLayout, bindingLayout, params);
+
+    vkDestroyShaderModule(VulkanInstance::GetInstance().device(), fragShaderModule, nullptr);
+    vkDestroyShaderModule(VulkanInstance::GetInstance().device(), vertShaderModule, nullptr);
 }
 
 Pipeline::Pipeline(const uint8_t* vertexShader, size_t vertexShaderSize,
@@ -30,10 +35,26 @@ Pipeline::Pipeline(const uint8_t* vertexShader, size_t vertexShaderSize,
                    const BindingLayout& bindingLayout,
                    const PipelineParameters& params)
 {
+    m_type = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
     VkShaderModule vertShaderModule = buildShader(vertexShader, vertexShaderSize);
     VkShaderModule fragShaderModule = buildShader(fragmentShader, fragmentShaderSize);
 
     init(vertShaderModule, fragShaderModule, inputLayout, bindingLayout, params);
+
+    vkDestroyShaderModule(VulkanInstance::GetInstance().device(), fragShaderModule, nullptr);
+    vkDestroyShaderModule(VulkanInstance::GetInstance().device(), vertShaderModule, nullptr);
+}
+
+Pipeline::Pipeline(const uint8_t* computeShader, size_t computeShaderSize, const BindingLayout& bindingLayout)
+{
+    m_type = VK_PIPELINE_BIND_POINT_COMPUTE;
+
+    VkShaderModule computeShaderModule = buildShader(computeShader, computeShaderSize);
+
+    init(computeShaderModule, bindingLayout);
+
+    vkDestroyShaderModule(VulkanInstance::GetInstance().device(), computeShaderModule, nullptr);
 }
 
 void Pipeline::init(VkShaderModule vertShaderModule, 
@@ -199,15 +220,49 @@ void Pipeline::init(VkShaderModule vertShaderModule,
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
 
-    if(vkCreateGraphicsPipelines(vkInstance.device(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
+    if(vkCreateGraphicsPipelines(vkInstance.device(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS)
     {
         throw std::runtime_error("failed to create graphics pipeline!");
     }
 
-    vkDestroyShaderModule(vkInstance.device(), fragShaderModule, nullptr);
-    vkDestroyShaderModule(vkInstance.device(), vertShaderModule, nullptr);
-
     std::cout << "Graphics Pipeline created" << std::endl;
+}
+
+void Pipeline::init(VkShaderModule computeShaderModule,
+                    const BindingLayout& bindingLayout)
+{
+    VulkanInstance& vkInstance = VulkanInstance::GetInstance();
+
+    createDescriptorSetLayout(bindingLayout);
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = bindingLayout.pushranges.size();
+    pipelineLayoutInfo.pPushConstantRanges = bindingLayout.pushranges.data();
+
+    if (vkCreatePipelineLayout(vkInstance.device(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create pipeline layout!");
+    }
+
+    VkComputePipelineCreateInfo pipelineInfo = {};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipelineInfo.layout = m_pipelineLayout;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineInfo.basePipelineIndex = -1;
+    pipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    pipelineInfo.stage.module = computeShaderModule;
+    pipelineInfo.stage.pName = "main";
+
+    if (vkCreateComputePipelines(vkInstance.device(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create graphics pipeline!");
+    }
+
+    std::cout << "Compute Pipeline created" << std::endl;
 }
 
 void Pipeline::createDescriptorSetLayout(const BindingLayout& bindingLayout)
@@ -232,7 +287,7 @@ Pipeline::~Pipeline()
 
     vkDestroyDescriptorSetLayout(vkInstance.device(), m_descriptorSetLayout, nullptr);
     vkDestroyPipelineLayout(vkInstance.device(), m_pipelineLayout, nullptr);
-    vkDestroyPipeline(vkInstance.device(), m_graphicsPipeline, nullptr);
+    vkDestroyPipeline(vkInstance.device(), m_pipeline, nullptr);
 }
 
 VkShaderModule Pipeline::loadShader(const char * name)

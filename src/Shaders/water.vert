@@ -21,7 +21,7 @@ layout(location = 0) out vec2 tcoord;
 layout(location = 1) out vec3 view_vec;
 
 const float size = 3000;
-const float tex_scale = 0.125; 
+const float tex_scale = 0.0625; 
 
 void main() 
 {

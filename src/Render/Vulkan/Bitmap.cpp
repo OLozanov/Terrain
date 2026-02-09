@@ -50,7 +50,7 @@ VkImageAspectFlags Bitmap::GetAspectMask(VkFormat format)
     return VK_IMAGE_ASPECT_COLOR_BIT;
 }
 
-void Bitmap::reset(uint32_t width, uint32_t height)
+void Bitmap::reset(uint32_t width, uint32_t height, uint32_t layers, uint32_t mipmaps)
 {
     reset();
 
@@ -62,8 +62,8 @@ void Bitmap::reset(uint32_t width, uint32_t height)
     imageInfo.extent.width = static_cast<uint32_t>(width);
     imageInfo.extent.height = static_cast<uint32_t>(height);
     imageInfo.extent.depth = 1;
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
+    imageInfo.mipLevels = mipmaps;
+    imageInfo.arrayLayers = layers;
     imageInfo.format = m_format;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -96,7 +96,7 @@ void Bitmap::reset(uint32_t width, uint32_t height)
     VkImageViewCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     createInfo.image = m_image;
-    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    createInfo.viewType = layers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
     createInfo.format = m_format;
 
     createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -106,9 +106,9 @@ void Bitmap::reset(uint32_t width, uint32_t height)
 
     createInfo.subresourceRange.aspectMask = GetAspectMask(m_format);
     createInfo.subresourceRange.baseMipLevel = 0;
-    createInfo.subresourceRange.levelCount = 1;
+    createInfo.subresourceRange.levelCount = mipmaps;
     createInfo.subresourceRange.baseArrayLayer = 0;
-    createInfo.subresourceRange.layerCount = 1;
+    createInfo.subresourceRange.layerCount = layers;
 
     if (vkCreateImageView(vkInstance.device(), &createInfo, nullptr, &m_imageView) != VK_SUCCESS)
     {

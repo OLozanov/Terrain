@@ -15,6 +15,7 @@
 #include <thread>
 #include <vector>
 #include <memory>
+#include <cmath>
 
 enum Key
 {
@@ -22,6 +23,13 @@ enum Key
     key_down = 2,
     key_left = 4,
     key_right =	8
+};
+
+struct WaveParams
+{
+    glm::vec2 frequency;
+    float amplitude;
+    float speed;
 };
 
 class App
@@ -36,17 +44,22 @@ class App
     Render::Pipeline m_fogPipeline;
     Render::Pipeline m_waterPipeline;
     Render::Pipeline m_debugPipeline;
-    
+
+    Render::Pipeline m_wavesPipeline;
+
     Render::DescriptorSet m_skyDescriptors;
     Render::DescriptorSet m_skyReflDescriptors;
     Render::DescriptorSet m_terrainDescriptors;
     Render::DescriptorSet m_terrainReflDescriptors;
     Render::DescriptorSet m_fogDescriptors;
-    std::vector<Render::DescriptorSet> m_waterDescriptors;
+    Render::DescriptorSet m_waterDescriptors;
     Render::DescriptorSet m_debugDescriptors;
+    Render::DescriptorSet m_wavesDescriptors;
 
     Render::CommandList m_mainCommandList;
     Render::CommandList m_reflCommandList;
+
+    Render::ConstantBuffer<WaveParams> m_waveParams;
 
     std::unique_ptr<Image> m_grass;
     std::unique_ptr<Image> m_dirt;
@@ -57,7 +70,8 @@ class App
     std::unique_ptr<Image> m_rockNorm;
 
     std::unique_ptr<Image> m_clouds;
-    std::vector<std::unique_ptr<Image>> m_waves;
+
+    Render::Bitmap m_waves;
 
     Render::Sampler m_sampler;
     Render::Sampler m_clampSampler;
@@ -112,17 +126,23 @@ class App
     static constexpr float WaterFogDensity = 0.25f;
     static constexpr float WaterLevel = 10.0f;
 
-    static constexpr size_t WavesFrameNum = 8;
+    static constexpr float WavesAnimSpeed = 32.0f;
+    static constexpr size_t WavesNum = 16;
+    static constexpr size_t WavesFrameNum = 32;
+    static constexpr uint32_t WavesTextureSize = 512;
+    const uint32_t WavesMipLevels = std::log2(WavesTextureSize) + 1;
 
 private:
+    void initBoxGeometry();
+
+    void generateWaves();
+
     void displayReflection();
     void reflectionThread();
 
 public:
     App(VkSurfaceKHR surface);
     ~App();
-
-    void initBoxGeometry();
 
     void resize(uint32_t width, uint32_t height);
 

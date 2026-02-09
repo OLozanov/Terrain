@@ -15,6 +15,7 @@ class CommandList
     VkCommandPool m_commandPool;
     VkCommandBuffer m_commandBuffer;
     VkPipelineLayout m_layout;
+    VkPipelineBindPoint m_pipelineType;
 
     bool m_clear;
     VkClearColorValue m_clearColor = {};
@@ -37,7 +38,7 @@ public:
     void bindFrameBuffer(const VkExtent2D& frameExtent, const VkImageView& colorBuffer, const VkImageView& depthBuffer);
     void finishRender();
 
-    void bindPipeline(const Pipeline& graphicsPipeline);
+    void bindPipeline(const Pipeline& pipeline);
     void bindIndexBuffer(VkBuffer buffer);
     void bindVertexBuffer(VkBuffer buffer);
     void bindDescriptorSet(VkDescriptorSet descriptorSet);
@@ -58,6 +59,8 @@ public:
     void draw(uint32_t vertexCount, uint32_t instanceCount = 1, uint32_t firstVertex = 0, uint32_t firstInstance = 0);
     void drawIndexed(uint16_t num);
 
+    void dispatch(uint32_t x, uint32_t y, uint32_t z = 1);
+
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, size_t size);
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, size_t mipmaps);
@@ -71,6 +74,8 @@ public:
                    const VkOffset3D& dstOffsetMin,
                    const VkOffset3D& dstOffsetMax,
                    VkFilter filter);
+
+    void buildMipmaps(VkImage image, uint32_t width, uint32_t height, uint32_t levels, uint32_t layers = 1);
 
     void barrier(const VkImageMemoryBarrier& barrier,
                        VkPipelineStageFlags sourceStage,

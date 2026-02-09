@@ -31,16 +31,22 @@ void Frustum::update(const glm::mat4& mat)
 	m_planes[3].w = mat[3].w + mat[3].y;
 	
 	// near
-	m_planes[4].x = mat[0].w + mat[0].z;
-	m_planes[4].y = mat[1].w + mat[1].z;
-	m_planes[4].z = mat[2].w + mat[2].z;
-	m_planes[4].w = mat[3].w + mat[3].z;
+	m_planes[4].x = mat[0].z;
+	m_planes[4].y = mat[1].z;
+	m_planes[4].z = mat[2].z;
+	m_planes[4].w = mat[3].z;
 	
 	// far
 	m_planes[5].x = mat[0].w - mat[0].z;
 	m_planes[5].y = mat[1].w - mat[1].z;
 	m_planes[5].z = mat[2].w - mat[2].z;
 	m_planes[5].w = mat[3].w - mat[3].z;
+
+	for (size_t i = 0; i < 6; i++)
+	{
+		float rlen = 1.0f / m_planes[i].xyz().length();
+		m_planes[i] *= rlen;
+	}
 }
 
 bool Frustum::test(const glm::vec3& pos, const glm::vec3& bbox) const

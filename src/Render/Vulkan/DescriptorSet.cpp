@@ -81,4 +81,22 @@ void DescriptorSet::bind(uint32_t binding, uint32_t index, VkImageView image, Vk
     vkUpdateDescriptorSets(VulkanInstance::GetInstance().device(), 1, &descriptorWrite, 0, nullptr);
 }
 
+void DescriptorSet::bind(uint32_t binding, VkImageView image)
+{
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageInfo.imageView = image;
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = m_descriptorSet;
+    descriptorWrite.dstBinding = binding;
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(VulkanInstance::GetInstance().device(), 1, &descriptorWrite, 0, nullptr);
+}
+
 } // namespace Render
