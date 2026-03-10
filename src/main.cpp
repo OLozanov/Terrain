@@ -26,15 +26,17 @@ int main(int argc, char* args[])
 
 	unsigned long curtime = SDL_GetTicks();
 
-	while (true)
+	bool run = true;
+
+	while (run)
 	{
 		SDL_Event event;
 
-		if (SDL_PollEvent(&event))
+		while (SDL_PollEvent(&event))
 		{
 			if (event.type == SDL_EVENT_QUIT) break;
 			else
-				if (event.type == SDL_EVENT_KEY_UP && event.key.key == SDLK_ESCAPE) break;
+				if (event.type == SDL_EVENT_KEY_UP && event.key.key == SDLK_ESCAPE) run = false;
 
 			app.input(event);
 		}

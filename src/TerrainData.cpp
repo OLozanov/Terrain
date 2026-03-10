@@ -103,6 +103,8 @@ void TerrainData::buildNormals()
     Render::Buffer buffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, size);
     uint32_t* normals = reinterpret_cast<uint32_t*>(buffer.map(size));
 
+    m_derivatives.resize(size);
+
     auto heightmap = [data = reinterpret_cast<uint16_t*>(m_heightmap->data), width, scale = m_height * m_scale](size_t x, size_t y) -> float
     {
         uint16_t val = *(data + (y * width + x));
@@ -112,6 +114,11 @@ void TerrainData::buildNormals()
     auto normal = [normals, width](size_t x, size_t y) -> uint32_t&
     {
         return *(normals + (y * width + x));
+    };
+
+    auto derivative = [this, width](size_t x, size_t y) -> glm::vec2&
+    {
+        return *(m_derivatives.data() + (y * width + x));
     };
 
     for (size_t k = 0; k < height; k++)
@@ -128,6 +135,8 @@ void TerrainData::buildNormals()
             float x = -dx;
             float y = dy;
             float z = 1.0f;
+
+            derivative(i, k) = { x, y };
 
             float len = sqrt(x * x + y * y + z * z);
 
@@ -262,4 +271,76 @@ void TerrainData::generateTiles()
 const HeightRange& TerrainData::getTileRange(const TileKey& tilekey) const
 {
     return m_ranges.at(tilekey);
+}
+
+float TerrainData::height(float x, float y) const
+{
+    x = std::clamp(x, 0.0f, 1.0f);
+    y = std::clamp(y, 0.0f, 1.0f);
+
+    x *= (m_heightmap->width - 1);
+    y *= (m_heightmap->height - 1);
+
+    size_t ix = floor(x);
+    size_t iy = floor(y);
+
+    uint32_t width = m_heightmap->width;
+    uint16_t* pixel = (uint16_t*)m_heightmap->data + (iy * width + ix);
+
+    float fx = x - ix;
+    float fy = y - iy;
+    float rfx = 1.0f - fx;
+    float rfy = 1.0f - fy;
+
+    glm::vec4 weight = glm::vec4(rfx * rfy, 
+                                 fx * rfy,
+                                 rfx * fy, 
+                                 fx * fy );
+
+    glm::vec4 samples = glm::vec4(*pixel,
+                                  *(pixel + 1),
+                                  *(pixel + width),
+                                  *(pixel + width + 1));
+
+   return glm::dot(weight, samples) / 65535.0f * m_height;
+}
+
+glm::vec3 TerrainData::normal(float x, float y) const
+{
+    x = std::clamp(x, 0.0f, 1.0f);
+    y = std::clamp(y, 0.0f, 1.0f);
+
+    x *= (m_heightmap->width - 1);
+    y *= (m_heightmap->height - 1);
+
+    size_t ix = floor(x);
+    size_t iy = floor(y);
+
+    uint32_t width = m_heightmap->width;
+    const glm::vec2* pixel = m_derivatives.data() + (iy * width + ix);
+
+    float fx = x - ix;
+    float fy = y - iy;
+    float rfx = 1.0f - fx;
+    float rfy = 1.0f - fy;
+
+    glm::vec4 weight = glm::vec4(rfx * rfy,
+                                 fx * rfy,
+                                 rfx * fy,
+                                 fx * fy);
+
+    glm::vec4 xsamples = glm::vec4(pixel->x,
+                                   (pixel + 1)->x,
+                                   (pixel + width)->x,
+                                   (pixel + width + 1)->x);
+
+    glm::vec4 ysamples = glm::vec4(pixel->y,
+                                   (pixel + 1)->y,
+                                   (pixel + width)->y,
+                                   (pixel + width + 1)->y);
+
+    float dx = glm::dot(weight, xsamples);
+    float dy = glm::dot(weight, ysamples);
+
+    return glm::normalize(glm::vec3(dx, dy, 1.0f));
 }

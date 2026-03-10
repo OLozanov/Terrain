@@ -24,11 +24,32 @@ struct TileKey
     uint32_t x;
     uint32_t y;
 
+    bool operator==(const TileKey& key) const = default;
+
     bool operator<(const TileKey& key) const
     {
         return std::tie(level, x, y) < std::tie(key.level, key.x, key.y);
     }
 };
+
+namespace std {
+    template <>
+    struct hash<TileKey> {
+        std::size_t operator()(const TileKey& key) const noexcept {
+
+            std::size_t h1 = std::hash<uint32_t>{}(key.x);
+            std::size_t h2 = std::hash<uint32_t>{}(key.y);
+            std::size_t h3 = std::hash<uint32_t>{}(key.level);
+
+            return h1 ^ (h2 << 1) ^ (h3 << 2);
+        }
+    };
+}
+
+/*struct TileData
+{
+    std::vector<GrassInstance> m_grass;
+};*/
 
 using HeightRange = std::pair<float, float>;
 
@@ -39,7 +60,7 @@ public:
 
     void load(const char* filename, float scale);
 
-    float height() const { return m_height; }
+    float heightScale() const { return m_height; }
     uint32_t size() const { return m_size; }
     uint32_t levels() const { return m_levels; }
 
@@ -47,6 +68,9 @@ public:
 
     const Image& heightmap() const { return *m_heightmap; }
     const Image& normals() const { return *m_normals; }
+
+    float height(float x, float y) const;
+    glm::vec3 normal(float x, float y) const;
 
 private:
     void buildNormals();
@@ -68,6 +92,8 @@ private:
     std::unique_ptr<Image> m_heightmap;
     std::unique_ptr<Image> m_normals;
     std::unique_ptr<Image> m_layermap;
+
+    std::vector<glm::vec2> m_derivatives;
 
     std::map<TileKey, HeightRange> m_ranges;
 };

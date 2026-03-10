@@ -69,3 +69,9 @@ void View::reflect(const View& view, float h)
 
     m_frustum.update(viewProj);
 }
+
+void View::updateVisibility(uint32_t flags)
+{ 
+    m_terrainView.update(); 
+    if (flags & DisplayGrass) m_terrainView.updateGrass();
+}

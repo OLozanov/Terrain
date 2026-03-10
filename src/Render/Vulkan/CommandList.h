@@ -41,6 +41,7 @@ public:
     void bindPipeline(const Pipeline& pipeline);
     void bindIndexBuffer(VkBuffer buffer);
     void bindVertexBuffer(VkBuffer buffer);
+    void bindVertexBuffer(uint32_t binding, VkBuffer buffer);
     void bindDescriptorSet(VkDescriptorSet descriptorSet);
 
     void setPolygonMode(VkPolygonMode mode);
@@ -56,8 +57,11 @@ public:
         vkCmdPushConstants(m_commandBuffer, m_layout, flags, offset, sizeof(T), &value);
     }
 
-    void draw(uint32_t vertexCount, uint32_t instanceCount = 1, uint32_t firstVertex = 0, uint32_t firstInstance = 0);
-    void drawIndexed(uint16_t num);
+    void draw(uint32_t vertexCount, uint32_t instanceCount = 1, 
+              uint32_t firstVertex = 0, uint32_t firstInstance = 0);
+    void drawIndexed(uint32_t num, uint32_t instanceCount = 1, 
+                     uint32_t firstIndex = 0, uint32_t vertexOffset = 0, uint32_t firstInstance = 0);
+    //void drawIndexed(uint16_t num);
 
     void dispatch(uint32_t x, uint32_t y, uint32_t z = 1);
 

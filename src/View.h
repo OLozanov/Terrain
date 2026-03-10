@@ -17,6 +17,15 @@ struct ViewConstantBuffer
 class View
 {
 public:
+    enum Flags : uint32_t
+    {
+        DisplayGrass = 1,
+        DisplayVegetation = 2,
+
+        MainView = DisplayGrass | DisplayVegetation,
+    };
+
+public:
     View(Terrain& terrain);
 
     void setProjectionMat(const glm::mat4& proj, float znear, float zfar);
@@ -35,9 +44,10 @@ public:
 
     void reflect(const View& view, float h);
 
-    void updateVisibility() { m_terrainView.update(); }
+    void updateVisibility(uint32_t flags = 0);
 
     void displayTerrain(Render::CommandList& commandList) const { m_terrainView.display(commandList); }
+    void displayGrass(Render::CommandList& commandList) const { m_terrainView.displayGrass(commandList); }
     void displayBBoxes(Render::CommandList& commandList) const { m_terrainView.displayBBoxes(commandList); }
 
 private:

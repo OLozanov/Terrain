@@ -11,11 +11,10 @@ public:
 
     void wait() noexcept
     {
-        while (m_flag != true) ;
-        m_flag = false;
+        while (!m_flag.exchange(false)) ;
     }
 
-    void signal() noexcept { m_flag = true; }
+    void signal() noexcept { m_flag.store(true); }
 };
 
 class SpinLock

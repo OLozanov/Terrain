@@ -5,13 +5,18 @@
 
 #include "Terrain.h"
 
+#include <random>
 #include <algorithm>
 
 Terrain::Terrain()
 : m_size(64)
 , m_maxLevel(4)
+, m_grassCache(GrassCacheSize)
 {
     initGeometry();
+    initGrass();
+
+    generateGrassPatch();
 
     m_dataSource.load("heightmaps/islands.png", 2.0);
 
@@ -58,10 +63,58 @@ void Terrain::initGeometry()
     m_indexBuffer.setData(indices.data(), indices.size());
 }
 
-float Terrain::tileSize(uint32_t level)
+void Terrain::initGrass()
+{
+    std::vector<GrassVertex> verts = { // Front
+                                     {{-0.043f, 0.0f}, {-0.25f, 1.0f}}, {{0.043f, 0.0f}, {0.25f, 1.0f}},
+                                     {{-0.04f, 0.2f}, {-0.25f, 1.0f}},  {{0.04f, 0.2f}, {0.25f, 1.0f}},
+                                     {{-0.035f, 0.4f}, {-0.25f, 1.0f}}, {{0.035f, 0.4f}, {0.25f, 1.0f}},
+                                     {{-0.03f, 0.6f}, {-0.25f, 1.0f}},  {{0.03f, 0.6f}, {0.25f, 1.0f}},
+                                     {{-0.02f, 0.8f}, {-0.25f, 1.0f}},  {{0.02f, 0.8f}, {0.25f, 1.0f}},
+                                     {{0.0f, 1.0f}, {0.0f, 1.0f}} };
+                                     // Back
+                                     /*{{-0.043f, 0.0f}, {-0.25f, -1.0f}}, {{0.043f, 0.0f}, {0.25f, -1.0f}},
+                                     {{-0.04f, 0.2f}, {-0.25f, -1.0f}},  {{0.04f, 0.2f}, {0.25f, -1.0f}},
+                                     {{-0.035f, 0.4f}, {-0.25f, -1.0f}}, {{0.035f, 0.4f}, {0.25f, -1.0f}},
+                                     {{-0.03f, 0.6f}, {-0.25f, -1.0f}},  {{0.03f, 0.6f}, {0.25f, -1.0f}},
+                                     {{-0.02f, 0.8f}, {-0.25f, -1.0f}},  {{0.02f, 0.8f}, {0.25f, -1.0f}},
+                                     {{0.0f, 1.0f}, {0.0f, -1.0f}} };*/
+
+    std::vector<uint16_t> indices = { // High LOD
+                                      2, 0, 1, 1, 3, 2,
+                                      4, 2, 3, 3, 5, 4,
+                                      6, 4, 5, 5, 7, 6,
+                                      8, 6, 7, 7, 9, 8,
+                                      10, 8, 9,
+                                      // Low LOD
+                                      10, 0, 1
+                                      };
+
+    m_grassBlade.setData(verts, indices);
+}
+
+float Terrain::lodDist(uint32_t level)
 {
     uint32_t tnum = 1 << level;
     return m_size / tnum * 2.5f;
+}
+
+float Terrain::tileSize(uint32_t level)
+{
+    uint32_t tnum = 1 << level;
+    return m_size / tnum;
+}
+
+glm::vec2 Terrain::tileOffset(const TileKey& tilekey)
+{
+    uint32_t tnum = 1 << tilekey.level;
+
+    float tilesz = m_size / tnum;
+
+    float x = tilesz * (int(tilekey.x) - int(tnum) / 2 + 0.5f);
+    float y = tilesz * (int(tilekey.y) - int(tnum) / 2 + 0.5f);
+
+    return glm::vec2(x, y);
 }
 
 BBox Terrain::getBBox(const TileKey& tilekey)
@@ -90,6 +143,52 @@ BBox Terrain::getBBox(const TileKey& tilekey)
     return { min, max };
 }
 
+void Terrain::generateGrassPatch()
+{
+    std::random_device rd;
+    std::seed_seq seq{ rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd() };
+    std::mt19937 uniformGenerator(seq);
+
+    std::uniform_real_distribution<float> rotDistribution(0.0f, 2.0 * glm::pi<float>());
+    std::uniform_real_distribution<float> offsetDistribution(-0.25f, 0.25f);
+
+    constexpr float density = 10.0f;
+    float sz = tileSize(m_maxLevel) * 2.0f;
+
+    size_t n = TileParams::GridSize * density;
+    float step = sz / n;
+
+    m_grassPatchSize = sz;
+    m_grassDensity = n;
+
+    for (size_t k = 0; k < n; k++)
+        for (size_t i = 0; i < n; i++)
+        {
+            float xoffset = offsetDistribution(uniformGenerator);
+            float yoffset = offsetDistribution(uniformGenerator);
+
+            float x = (i + 0.5f + xoffset) * step - sz * 0.5f;
+            float y = (k + 0.5f + yoffset) * step - sz * 0.5f;
+
+            glm::vec3 pos = {x, 0.0f, y};
+            float rot = rotDistribution(uniformGenerator);
+
+            float rcos = cosf(rot);
+            float rsin = sinf(rot);
+
+            m_grassParams.emplace_back(x, y, rcos, rsin);
+        }
+
+    size_t bytes = n * n * sizeof(GrassInstance) * GrassCacheSize;
+    m_grass.reset(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
+                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | 
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | 
+                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+                  bytes);
+
+    m_grassData = static_cast<GrassInstance*>(m_grass.map(bytes));
+}
+
 void Terrain::generateTile(const TileKey& tilekey)
 {
     if (m_tiles.find(tilekey) != m_tiles.end()) return;
@@ -110,7 +209,7 @@ void Terrain::generateTile(const TileKey& tilekey)
     mat = glm::translate(glm::mat4(1.0f), pos) * mat;
 
     tile.mat = mat;
-    tile.lodDist = tileSize(tilekey.level);
+    tile.lodDist = lodDist(tilekey.level);
 }
 
 void Terrain::generateTiles(const std::vector<TileKey>& tiles)
@@ -120,6 +219,63 @@ void Terrain::generateTiles(const std::vector<TileKey>& tiles)
     for (const TileKey& tile : tiles) generateTile(tile);
 
     m_dataLock.unlock();
+}
+
+void Terrain::generateGrassPatch(GrassPatch& patch)
+{
+    size_t n = m_grassDensity * m_grassDensity;
+    size_t offset = n * patch.id;
+
+    std::vector<GrassInstance> grass;
+    grass.reserve(n);
+
+    for (size_t i = 0; i < n; i++)
+    {
+        const glm::vec4& params = m_grassParams[i];
+
+        glm::vec2 tpos = glm::vec2((patch.pos.x + params.x) / (m_size - 0.5f) + 0.5f, 
+                                   (patch.pos.y + params.y) / (m_size - 0.5f) + 0.5f);
+
+        float h = m_dataSource.height(tpos.x, tpos.y);
+
+        if (h > 12.0f && h < 31.0f)
+        {
+            glm::vec3 pos = { params.x, h, params.y };
+            grass.push_back({ pos, {params.z, params.w} });
+        }
+    }
+
+    patch.num = grass.size();
+
+    if (patch.num > 0)
+        memcpy(m_grassData + offset, grass.data(), grass.size() * sizeof(GrassInstance));
+}
+
+void Terrain::generateGrass(const std::vector<TileKey>& tiles)
+{
+    std::vector<TileKey> newTiles;
+
+    for (const TileKey& tile : tiles)
+    {
+        if (tile.level != m_maxLevel) continue;
+        
+        size_t n = m_grassCache.touchNode(tile);
+
+        if (n == GrassCache::InvalidNode) newTiles.push_back(tile);
+    }
+
+    for (const TileKey& tile : newTiles)
+    {
+        size_t n = m_grassCache.addNode(tile);
+
+        GrassPatch& patch = m_grassCache[n];
+
+        patch.bbox = getBBox(tile);
+        patch.pos = tileOffset(tile);
+        patch.id = n;
+
+        generateGrassPatch(patch);
+    }
 }
 
 void TerrainView::processTile(const TileKey& tilekey)
@@ -140,7 +296,7 @@ void TerrainView::processTile(const TileKey& tilekey)
         return;
     }
 
-    float dist = m_terrain.tileSize(tilekey.level);
+    float dist = m_terrain.lodDist(tilekey.level);
 
     if (bbox.intersectsSphere(m_camera.pos(), dist))
     {
@@ -174,6 +330,19 @@ void TerrainView::update()
     }
 
     m_terrain.generateTiles(m_viewTiles);
+
+}
+
+void TerrainView::updateGrass()
+{
+    m_grassTiles.clear();
+
+    for (const TileKey& tile : m_viewTiles)
+    {
+        if (tile.level == m_terrain.levels()) m_grassTiles.push_back(tile);
+    }
+
+    m_terrain.generateGrass(m_grassTiles);
 }
 
 void TerrainView::display(Render::CommandList& commandList) const
@@ -191,6 +360,30 @@ void TerrainView::display(Render::CommandList& commandList) const
         commandList.setConstant(12, tile.lodDist);
         commandList.setConstant(16, tile.mat);
         commandList.drawIndexed(TileParams::IndexNum);
+    }
+}
+
+void TerrainView::displayGrass(Render::CommandList& commandList) const
+{
+    commandList.bindIndexBuffer(m_terrain.m_grassBlade.indexBuffer());
+    commandList.bindVertexBuffer(m_terrain.m_grassBlade.vertexBuffer());
+    commandList.bindVertexBuffer(1, m_terrain.m_grass);
+
+    size_t stride = m_terrain.m_grassDensity * m_terrain.m_grassDensity;
+
+    for (const TileKey& tile: m_grassTiles)
+    {
+        const GrassPatch& patch = m_terrain.grasPatch(tile);
+
+        if (patch.num == 0) continue;
+
+        bool highlod = patch.bbox.intersectsSphere(m_camera.pos(), GrassLodDist);
+
+        uint32_t vnum = highlod ? 27 : 3;
+        uint32_t offset = highlod ? 0 : 27;
+
+        commandList.setConstant(0, patch.pos);
+        commandList.drawIndexed(vnum, patch.num, offset, 0, patch.id * stride);
     }
 }
 

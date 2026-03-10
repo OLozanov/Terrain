@@ -10,7 +10,7 @@ struct BBox
     glm::vec3 min;
     glm::vec3 max;
 
-    bool intersectsSphere(glm::vec3 center, float r) 
+    bool intersectsSphere(glm::vec3 center, float r) const
     {
         float r2 = r * r;
         float dmin = 0;

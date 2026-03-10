@@ -6,12 +6,16 @@
 #include "App.h"
 
 #include "Render/Vertex.h"
+#include "Grass.h"
 
 #include "shaders/sky.vert.h"
 #include "shaders/sky.frag.h"
 
 #include "shaders/terrain.vert.h"
 #include "shaders/terrain.frag.h"
+
+#include "shaders/grass.vert.h"
+#include "shaders/grass.frag.h"
 
 #include "shaders/fog.vert.h"
 #include "shaders/fog.frag.h"
@@ -22,7 +26,6 @@
 #include "shaders/debug.vert.h"
 #include "shaders/debug.frag.h"
 
-#include "shaders/mipmap.comp.h"
 #include "shaders/waves.comp.h"
 
 #include <random>
@@ -45,6 +48,14 @@ const Render::InputLayout TerrainLayout = { .bindings = { {0, sizeof(glm::vec2),
                                             .attributes = { {0, 0, VK_FORMAT_R32G32_SFLOAT, 0} }
                                           };
 
+const Render::InputLayout GrassLayout = { .bindings = { {0, sizeof(GrassVertex), VK_VERTEX_INPUT_RATE_VERTEX},
+                                                        {1, sizeof(GrassInstance), VK_VERTEX_INPUT_RATE_INSTANCE},},
+                                          .attributes = { {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GrassVertex, pos)},
+                                                          {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GrassVertex, norm)},
+                                                          {2, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(GrassInstance, pos)},
+                                                          {3, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(GrassInstance, dir)},}
+                                         };
+
 const Render::BindingLayout SimpleBindings = { .bindings = { {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
                                                              {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr} },
                                                .pushranges = { {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 16} }
@@ -62,6 +73,11 @@ const Render::BindingLayout TerrainBindings = { .bindings = { {0, VK_DESCRIPTOR_
                                                               {4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr} },
                                                .pushranges = { {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * (16 + 4)} }
                                               };
+
+const Render::BindingLayout GrassBindings = { .bindings = { {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr} },
+                                                            //{1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr} },
+                                              .pushranges = { {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 2 } }
+                                            };
 
 const Render::BindingLayout FogBindings = { .bindings = { {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
                                                           {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}},
@@ -93,6 +109,8 @@ App::App(VkSurfaceKHR surface)
                   .dynamicCullMode = true })
 , m_terrainPipeline(g_terrain_vert, g_terrain_vert_size, g_terrain_frag, g_terrain_frag_size, TerrainLayout, TerrainBindings, 
                     { .dynamicCullMode = true })
+, m_grassPipeline(g_grass_vert, g_grass_vert_size, g_grass_frag, g_grass_frag_size, GrassLayout, GrassBindings,
+                  { .cullMode = VK_CULL_MODE_NONE })
 , m_fogPipeline(g_fog_vert, g_fog_vert_size, g_fog_frag, g_fog_frag_size, {}, FogBindings,
                 { .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
                   .depthTest = VK_FALSE,
@@ -110,6 +128,7 @@ App::App(VkSurfaceKHR surface)
 , m_skyReflDescriptors(m_skyPipeline.descriptorLayout())
 , m_terrainDescriptors(m_terrainPipeline.descriptorLayout())
 , m_terrainReflDescriptors(m_terrainPipeline.descriptorLayout())
+, m_grassDescriptors(m_grassPipeline.descriptorLayout())
 , m_fogDescriptors(m_fogPipeline.descriptorLayout())
 , m_waterDescriptors(m_waterPipeline.descriptorLayout())
 , m_debugDescriptors(m_debugPipeline.descriptorLayout())
@@ -140,6 +159,7 @@ App::App(VkSurfaceKHR surface)
 , m_debugDraw(false)
 , m_wireframe(false)
 , m_drawWater(true)
+, m_drawGrass(true)
 , m_speed(15.0f)
 , m_animTime(0.0f)
 , m_waveAnimFrame(0.0f)
@@ -187,6 +207,8 @@ App::App(VkSurfaceKHR surface)
     m_terrainReflDescriptors.bind(4, 0, *m_grassNorm, m_sampler);
     m_terrainReflDescriptors.bind(4, 1, *m_dirtNorm, m_sampler);
     m_terrainReflDescriptors.bind(4, 2, *m_rockNorm, m_sampler);
+
+    m_grassDescriptors.bind(0, m_mainView.sceneConstantBuffer(), sizeof(ViewConstantBuffer));
 
     m_fogDescriptors.bind(0, m_mainView.sceneConstantBuffer(), sizeof(ViewConstantBuffer));
     m_fogDescriptors.bind(1, m_depth, m_clampSampler);
@@ -263,6 +285,7 @@ void App::input(const SDL_Event& event)
             if (event.key.key == SDLK_1) m_debugDraw = !m_debugDraw;
             if (event.key.key == SDLK_2) m_wireframe = !m_wireframe;
             if (event.key.key == SDLK_3) m_drawWater = !m_drawWater;
+            if (event.key.key == SDLK_4) m_drawGrass = !m_drawGrass;
         break;
     }
 }
@@ -281,9 +304,7 @@ void App::update(float dt)
 void App::generateWaves()
 {
     std::random_device rd;
-
     std::seed_seq seq { rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd() };
-
     std::mt19937 uniformGenerator(seq);
 
     // Amplitude variation
@@ -390,7 +411,9 @@ void App::display()
     m_mainView.update(m_width, m_height);
     m_reflectionView.reflect(m_mainView, WaterLevel);
 
-    m_mainView.updateVisibility();
+    uint32_t viewFlags = m_drawGrass ? View::DisplayGrass : 0;
+
+    m_mainView.updateVisibility(viewFlags);
 
     if (drawWater) m_reflStartEvent.signal(); 
 
@@ -425,6 +448,14 @@ void App::display()
     m_mainCommandList.setConstant(8, VkBool32(VK_FALSE));
 
     m_mainView.displayTerrain(m_mainCommandList);
+
+    if (m_drawGrass)
+    {
+        m_mainCommandList.bindPipeline(m_grassPipeline);
+        m_mainCommandList.bindDescriptorSet(m_grassDescriptors);
+
+        m_mainView.displayGrass(m_mainCommandList);
+    }
 
     // Water
     if (drawWater)

@@ -181,6 +181,12 @@ void CommandList::bindVertexBuffer(VkBuffer buffer)
     vkCmdBindVertexBuffers(m_commandBuffer, 0, 1, &buffer, &offset);
 }
 
+void CommandList::bindVertexBuffer(uint32_t binding, VkBuffer buffer)
+{
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(m_commandBuffer, binding, 1, &buffer, &offset);
+}
+
 void CommandList::bindDescriptorSet(VkDescriptorSet descriptorSet)
 {
     vkCmdBindDescriptorSets(m_commandBuffer,
@@ -271,14 +277,16 @@ void CommandList::bind(uint32_t binding, VkImageView image)
                            &writeInfo);
 }
 
-void CommandList::draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
+void CommandList::draw(uint32_t vertexCount, uint32_t instanceCount, 
+                       uint32_t firstVertex, uint32_t firstInstance)
 {
     vkCmdDraw(m_commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
-void CommandList::drawIndexed(uint16_t num)
+void CommandList::drawIndexed(uint32_t num, uint32_t instanceCount, 
+                              uint32_t firstIndex, uint32_t vertexOffset, uint32_t firstInstance)
 {
-    vkCmdDrawIndexed(m_commandBuffer, num, 1, 0, 0, 0);
+    vkCmdDrawIndexed(m_commandBuffer, num, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
 void CommandList::dispatch(uint32_t x, uint32_t y, uint32_t z)

@@ -1,6 +1,6 @@
 # Terrain
 
-Vulkan terrain renderer. 
+Vulkan terrain renderer.<br> 
 Implements CDLOD (Continuous Distance-Dependent Level of Detail) for smooth LOD transition:<br>
 &emsp;https://aggrobird.com/files/cdlod_latest.pdf<br>
 &emsp;https://svnte.se/cdlod-terrain
@@ -10,5 +10,5 @@ Control keys:<br>
 &emsp;s - backward<br>
 &emsp;1 - show/hide bounding boxes<br>
 &emsp;2 - toggle wireframe mode<br>
-&emsp;3 - show/hide water
-	
+&emsp;3 - show/hide water<br>
+&emsp;4 - show/hide grass

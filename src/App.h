@@ -41,6 +41,7 @@ class App
 
     Render::Pipeline m_skyPipeline;
     Render::Pipeline m_terrainPipeline;
+    Render::Pipeline m_grassPipeline;
     Render::Pipeline m_fogPipeline;
     Render::Pipeline m_waterPipeline;
     Render::Pipeline m_debugPipeline;
@@ -51,6 +52,7 @@ class App
     Render::DescriptorSet m_skyReflDescriptors;
     Render::DescriptorSet m_terrainDescriptors;
     Render::DescriptorSet m_terrainReflDescriptors;
+    Render::DescriptorSet m_grassDescriptors;
     Render::DescriptorSet m_fogDescriptors;
     Render::DescriptorSet m_waterDescriptors;
     Render::DescriptorSet m_debugDescriptors;
@@ -108,6 +110,7 @@ class App
     bool m_debugDraw;
     bool m_wireframe;
     bool m_drawWater;
+    bool m_drawGrass;
 
     float m_speed;
     float m_animTime;

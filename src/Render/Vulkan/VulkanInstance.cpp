@@ -428,13 +428,15 @@ void VulkanInstance::transitImageState(VkImage image, VkImageLayout oldLayout, V
 
 void VulkanInstance::createDescriptorPool()
 {
-    VkDescriptorPoolSize poolSize[3];
+    VkDescriptorPoolSize poolSize[4];
     poolSize[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSize[0].descriptorCount = 16;
     poolSize[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSize[1].descriptorCount = 16;
     poolSize[2].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     poolSize[2].descriptorCount = 8;
+    poolSize[3].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    poolSize[3].descriptorCount = 8;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
