@@ -46,11 +46,6 @@ namespace std {
     };
 }
 
-/*struct TileData
-{
-    std::vector<GrassInstance> m_grass;
-};*/
-
 using HeightRange = std::pair<float, float>;
 
 class TerrainData

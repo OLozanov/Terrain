@@ -2,6 +2,7 @@
 #include "Render/Vulkan/VulkanInstance.h"
 
 #include <iostream>
+#include <stdexcept>
 
 Image::~Image()
 {
@@ -74,16 +75,16 @@ void downsample_rgba(uint8_t* in, uint8_t* out, int width, int height)
 }
 
 template <class T>
-void downsample(T* in, T* out, int width, int height)
+void downsample(uint8_t* in, uint8_t* out, int width, int height)
 {
     auto in_pixel = [in, width, height](int x, int y) -> T&
     {
-        return *(in + (y * width + x) * 4);
+        return *(reinterpret_cast<T*>(in) + (y * width + x));
     };
 
     auto out_pixel = [out, width = width / 2, height = height / 2](int x, int y) -> T&
     {
-        return *(out + (y * width + x) * 4);
+        return *(reinterpret_cast<T*>(out) + (y * width + x) * 4);
     };
 
     for (int y = 0; y < height / 2; y++)
@@ -99,7 +100,7 @@ void downsample(T* in, T* out, int width, int height)
 }
 
 template void downsample<uint8_t>(uint8_t* in, uint8_t* out, int width, int height);
-template void downsample<uint16_t>(uint16_t* in, uint16_t* out, int width, int height);
+template void downsample<uint16_t>(uint8_t* in, uint8_t* out, int width, int height);
 
 void BuildMipmaps(uint8_t* data, uint32_t width, uint32_t height, VkFormat format, size_t mipmaps)
 {
@@ -109,9 +110,11 @@ void BuildMipmaps(uint8_t* data, uint32_t width, uint32_t height, VkFormat forma
 
     switch (format)
     {
-    case VK_FORMAT_R8G8B8A8_UNORM: downsample_func = downsample_rgba;
-    case VK_FORMAT_R8_UNORM: downsample<uint8_t>;
-    case VK_FORMAT_R16_UNORM: downsample<uint16_t>;
+    case VK_FORMAT_R8G8B8A8_UNORM: downsample_func = downsample_rgba; break;
+    case VK_FORMAT_R8_UNORM: downsample_func = downsample<uint8_t>; break;
+    case VK_FORMAT_R16_UNORM: downsample_func = downsample<uint16_t>; break;
+    default:
+        throw std::runtime_error("MipMaps generation: unsupported format!");
     }
 
     uint8_t* in = data;

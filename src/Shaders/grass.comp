@@ -1,0 +1,37 @@
+#version 450
+layout (local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+struct BladeParam
+{
+	vec3 pos;
+	vec3 norm;
+};
+
+layout (binding = 0) uniform sampler2D heightmap;
+layout (binding = 1) uniform sampler2D normalmap;
+layout (std430, binding = 2) buffer grass_patch
+{
+	BladeParam blades[];
+};
+
+layout(push_constant) uniform constants
+{
+    vec2 pos;
+	uint offset;
+	uint sz;
+	float step;
+} params;
+
+void main (void) 
+{
+	uvec2 grid_pos = gl_GlobalInvocationID.xy;
+
+	vec2 pos = params.pos + gl_GlobalInvocationID.xy + 0.5;
+	float height = textureLod(heightmap, pos, 0.0).r;
+	vec3 norm = textureLod(normalmap, pos, 0.0).rgb;
+
+	uint idx = grid_pos.x + grid_pos.y * params.sz + params.offset;
+
+	blades[idx].pos = vec3(pos.x, height, pos.y);
+	blades[idx].norm = norm;
+}

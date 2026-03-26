@@ -29,16 +29,14 @@ Pipeline::Pipeline(const char* shader,
     vkDestroyShaderModule(VulkanInstance::GetInstance().device(), vertShaderModule, nullptr);
 }
 
-Pipeline::Pipeline(const uint8_t* vertexShader, size_t vertexShaderSize,
-                   const uint8_t* fragmentShader, size_t fragmentShaderSize,
-                   const InputLayout& inputLayout,
+Pipeline::Pipeline(const InputLayout& inputLayout,
                    const BindingLayout& bindingLayout,
                    const PipelineParameters& params)
 {
     m_type = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-    VkShaderModule vertShaderModule = buildShader(vertexShader, vertexShaderSize);
-    VkShaderModule fragShaderModule = buildShader(fragmentShader, fragmentShaderSize);
+    VkShaderModule vertShaderModule = buildShader(params.vertexShader.code, params.vertexShader.size);
+    VkShaderModule fragShaderModule = buildShader(params.fragmentShader.code, params.fragmentShader.size);
 
     init(vertShaderModule, fragShaderModule, inputLayout, bindingLayout, params);
 
@@ -46,11 +44,11 @@ Pipeline::Pipeline(const uint8_t* vertexShader, size_t vertexShaderSize,
     vkDestroyShaderModule(VulkanInstance::GetInstance().device(), vertShaderModule, nullptr);
 }
 
-Pipeline::Pipeline(const uint8_t* computeShader, size_t computeShaderSize, const BindingLayout& bindingLayout)
+Pipeline::Pipeline(const ShaderCode& computeShader, const BindingLayout& bindingLayout)
 {
     m_type = VK_PIPELINE_BIND_POINT_COMPUTE;
 
-    VkShaderModule computeShaderModule = buildShader(computeShader, computeShaderSize);
+    VkShaderModule computeShaderModule = buildShader(computeShader.code, computeShader.size);
 
     init(computeShaderModule, bindingLayout);
 

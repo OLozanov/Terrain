@@ -23,5 +23,6 @@ set(variable_name g_${variable_name})
 
 # Write the data to the output header file
 file(WRITE ${OUTPUT_FILE} "") # Create/empty the file
-file(APPEND ${OUTPUT_FILE} "const unsigned char ${variable_name}[] = {${filedata}};\n")
-file(APPEND ${OUTPUT_FILE} "const unsigned int ${variable_name}_size = sizeof(${variable_name});\n")
+file(APPEND ${OUTPUT_FILE} "#include \"Render/Vulkan/Pipeline.h\"\n\n")
+file(APPEND ${OUTPUT_FILE} "const uint8_t ${variable_name}_code[] = {${filedata}};\n")
+file(APPEND ${OUTPUT_FILE} "const Render::ShaderCode ${variable_name} = { ${variable_name}_code, sizeof(${variable_name}_code) };\n")

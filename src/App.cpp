@@ -102,28 +102,40 @@ const Render::BindingLayout WavesBindings = { .bindings = { {0, VK_DESCRIPTOR_TY
 
 App::App(VkSurfaceKHR surface)
 : m_swapchain(surface)
-, m_skyPipeline(g_sky_vert, g_sky_vert_size, g_sky_frag, g_sky_frag_size, SimpleLayout, SkyBindings, 
-                { .depthTest = VK_FALSE,
+, m_skyPipeline(SimpleLayout, SkyBindings, 
+                { .vertexShader = g_sky_vert,
+                  .fragmentShader = g_sky_frag,
+                  .depthTest = VK_FALSE,
                   .depthWrite = VK_FALSE,
                   .blend = VK_TRUE,
                   .dynamicCullMode = true })
-, m_terrainPipeline(g_terrain_vert, g_terrain_vert_size, g_terrain_frag, g_terrain_frag_size, TerrainLayout, TerrainBindings, 
-                    { .dynamicCullMode = true })
-, m_grassPipeline(g_grass_vert, g_grass_vert_size, g_grass_frag, g_grass_frag_size, GrassLayout, GrassBindings,
-                  { .cullMode = VK_CULL_MODE_NONE })
-, m_fogPipeline(g_fog_vert, g_fog_vert_size, g_fog_frag, g_fog_frag_size, {}, FogBindings,
-                { .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+, m_terrainPipeline(TerrainLayout, TerrainBindings, 
+                    { .vertexShader = g_terrain_vert,
+                      .fragmentShader = g_terrain_frag,
+                      .dynamicCullMode = true })
+, m_grassPipeline(GrassLayout, GrassBindings,
+                  { .vertexShader = g_grass_vert,
+                    .fragmentShader = g_grass_frag,
+                    .cullMode = VK_CULL_MODE_NONE })
+, m_fogPipeline({}, FogBindings,
+                { .vertexShader = g_fog_vert,
+                  .fragmentShader = g_fog_frag,
+                  .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
                   .depthTest = VK_FALSE,
                   .depthWrite = VK_FALSE,
                   .blend = VK_TRUE })
-, m_waterPipeline(g_water_vert, g_water_vert_size, g_water_frag, g_water_frag_size, {}, WaterBindings, 
-                  { .cullMode = VK_CULL_MODE_NONE,
+, m_waterPipeline({}, WaterBindings, 
+                  { .vertexShader = g_water_vert,
+                    .fragmentShader = g_water_frag,
+                    .cullMode = VK_CULL_MODE_NONE,
                     .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP })
-, m_debugPipeline(g_debug_vert, g_debug_vert_size, g_debug_frag, g_debug_frag_size, SimpleLayout, DebugBindings, 
-                  { .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+, m_debugPipeline(SimpleLayout, DebugBindings, 
+                  { .vertexShader = g_debug_vert,
+                    .fragmentShader = g_debug_frag,
+                    .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
                     .depthTest = VK_TRUE,
                     .depthWrite = VK_FALSE })
-, m_wavesPipeline(g_waves_comp, g_waves_comp_size, WavesBindings)
+, m_wavesPipeline(g_waves_comp, WavesBindings)
 , m_skyDescriptors(m_skyPipeline.descriptorLayout())
 , m_skyReflDescriptors(m_skyPipeline.descriptorLayout())
 , m_terrainDescriptors(m_terrainPipeline.descriptorLayout())

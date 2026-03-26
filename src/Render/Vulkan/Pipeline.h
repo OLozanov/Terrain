@@ -6,6 +6,12 @@
 namespace Render
 {
 
+struct ShaderCode
+{
+    const uint8_t* code = nullptr;
+    size_t size = 0;
+};
+
 struct InputLayout
 {
     const std::vector<VkVertexInputBindingDescription> bindings;
@@ -20,6 +26,8 @@ struct BindingLayout
 
 struct PipelineParameters
 {
+    ShaderCode vertexShader;
+    ShaderCode fragmentShader;
     VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
     VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;
     VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -57,13 +65,11 @@ public:
              const BindingLayout& bindingLayout,
              const PipelineParameters& params);
 
-    Pipeline(const uint8_t* vertexShader, size_t vertexShaderSize,
-             const uint8_t* fragmentShader, size_t fragmentShaderSize,
-             const InputLayout& inputLayout,
+    Pipeline(const InputLayout& inputLayout,
              const BindingLayout& bindingLayout,
              const PipelineParameters& params);
 
-    Pipeline(const uint8_t* computeShader, size_t computeShaderSize, const BindingLayout& bindingLayout);
+    Pipeline(const ShaderCode& computeShader, const BindingLayout& bindingLayout);
 
     ~Pipeline();
 

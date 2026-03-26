@@ -103,7 +103,6 @@ class App
 
     bool m_terminate = false;
 
-    float m_ang = 0;
     glm::mat4 m_projMat;
 
     uint32_t m_keys = 0;
